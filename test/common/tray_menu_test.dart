@@ -389,36 +389,104 @@ void main() {
       windows = AppTray.forPlatform(isMacOS: false, isWindows: true);
     });
 
-    test('gets a plain icon, no group submenus and no speed toggle', () async {
-      await update(
-        _trayState(
-          isStart: true,
-          groups: [
-            const Group(
-              name: 'Proxy',
-              type: GroupType.Selector,
-              all: [Proxy(name: 'A', type: 'Direct')],
-            ),
-          ],
-        ),
-        on: windows,
-      );
+    test(
+      'gets a plain icon, no macOS-only toggles and no global delay test',
+      () async {
+        await update(
+          _trayState(
+            isStart: true,
+            groups: [
+              const Group(
+                name: 'Proxy',
+                type: GroupType.Selector,
+                all: [Proxy(name: 'A', type: 'Direct')],
+              ),
+            ],
+          ),
+          on: windows,
+        );
 
-      final arguments = showCall()!.arguments as Map;
-      expect((arguments['icon'] as Map)['isTemplate'], isFalse);
-      expect(
-        _items(showCall()).where((item) => item['type'] == 'submenu'),
-        isEmpty,
+        final arguments = showCall()!.arguments as Map;
+        expect((arguments['icon'] as Map)['isTemplate'], isFalse);
+        expect(
+          _labels(showCall()),
+          isNot(contains(currentAppLocalizations.speedStatistics)),
+        );
+        expect(
+          _labels(showCall()),
+          isNot(contains(currentAppLocalizations.monochromeIcon)),
+        );
+        expect(_labels(showCall()), isNot(contains(HotAction.delayTest.label)));
+      },
+    );
+
+    test(
+      'wraps the groups in a proxies menu with a delay test per group',
+      () async {
+        await update(
+          _trayState(
+            groups: [
+              const Group(
+                name: 'Proxy',
+                type: GroupType.Selector,
+                all: [
+                  Proxy(name: 'A', type: 'Direct'),
+                  Proxy(name: 'B', type: 'Direct'),
+                ],
+              ),
+            ],
+          ),
+          on: windows,
+        );
+
+        final submenus = _items(
+          showCall(),
+        ).where((item) => item['type'] == 'submenu').toList();
+        expect(submenus, hasLength(1), reason: 'groups live inside the menu');
+        final parent = submenus.single;
+        expect(parent['label'], currentAppLocalizations.proxies);
+        final groups = (parent['items'] as List).cast<Map<Object?, Object?>>();
+        expect(groups, hasLength(1));
+        expect(groups.single['label'], 'Proxy');
+        final children = (groups.single['items'] as List)
+            .cast<Map<Object?, Object?>>();
+        expect(children.first['type'], 'action');
+        expect(children.first['label'], currentAppLocalizations.delayTest);
+        expect(children.skip(1).map((item) => item['label']), ['A', 'B']);
+      },
+    );
+
+    test('shows the measured delays inside the proxies menu', () async {
+      container.dispose();
+      container = ProviderContainer(
+        overrides: [
+          selectedProxyNameProvider('Proxy').overrideWithValue('A'),
+          trayDelaysProvider.overrideWithValue({
+            'Proxy': {'A': 120, 'B': -1},
+          }),
+        ],
       );
-      expect(
-        _labels(showCall()),
-        isNot(contains(currentAppLocalizations.speedStatistics)),
+      const group = Group(
+        name: 'Proxy',
+        type: GroupType.Selector,
+        all: [
+          Proxy(name: 'A', type: 'Direct'),
+          Proxy(name: 'B', type: 'Direct'),
+        ],
       );
-      expect(
-        _labels(showCall()),
-        isNot(contains(currentAppLocalizations.monochromeIcon)),
-      );
-      expect(_labels(showCall()), isNot(contains(HotAction.delayTest.label)));
+      await update(_trayState(groups: [group]), on: windows);
+
+      final parent = _items(
+        showCall(),
+      ).firstWhere((item) => item['type'] == 'submenu');
+      final groups = (parent['items'] as List).cast<Map<Object?, Object?>>();
+      expect(groups.single['detail'], '120');
+      final children = (groups.single['items'] as List)
+          .cast<Map<Object?, Object?>>();
+      expect(children.skip(1).map((item) => item['detail']), [
+        '120',
+        currentAppLocalizations.timeout,
+      ]);
     });
 
     test('joins modifiers with + in the hotkey hints', () async {

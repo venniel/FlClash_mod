@@ -40,12 +40,14 @@ class _TrayManagerState extends ConsumerState<TrayManager> {
         _requestUpdate();
       }
     });
-    if (system.isMacOS) {
+    if (system.isMacOS || system.isWindows) {
       ref.listenManual(trayDelaysProvider, (prev, next) {
         if (!const DeepCollectionEquality().equals(prev, next)) {
           _requestUpdate();
         }
       });
+    }
+    if (system.isMacOS) {
       ref.listenManual(trayTitleStateProvider, (prev, next) {
         if (prev != next) {
           _reportFailure(

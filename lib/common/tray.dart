@@ -186,6 +186,7 @@ class AppTray implements TrayPort {
         ),
       const TrayMenuSeparator(),
       if (isMacOS) ..._buildGroupMenu(trayState: trayState, read: read),
+      if (isWindows) ..._buildProxyMenu(trayState: trayState, read: read),
       if (trayState.isStart) ...[
         TrayMenuCheckbox(
           label: appLocalizations.tun,
@@ -270,16 +271,56 @@ class AppTray implements TrayPort {
     ];
   }
 
+  List<TrayMenuItem> _buildProxyMenu({
+    required TrayState trayState,
+    required ProviderReader read,
+  }) {
+    if (trayState.groups.isEmpty) {
+      return const [];
+    }
+    final delays = read(trayDelaysProvider);
+    final proxiesAction = read(proxiesActionProvider.notifier);
+    return [
+      TrayMenuSubmenu(
+        label: currentAppLocalizations.proxies,
+        items: [
+          for (final group in trayState.groups)
+            _buildGroupSubmenu(
+              group,
+              selectedName: read(selectedProxyNameProvider(group.name)),
+              delays: delays[group.name] ?? const {},
+              onSelected: (proxyName) {
+                proxiesAction.changeProxy(
+                  groupName: group.name,
+                  proxyName: proxyName,
+                );
+              },
+              onDelayTest: () {
+                proxiesAction.delayTestGroups([group]);
+              },
+            ),
+        ],
+      ),
+      const TrayMenuSeparator(),
+    ];
+  }
+
   TrayMenuSubmenu _buildGroupSubmenu(
     Group group, {
     required String? selectedName,
     required Map<String, int> delays,
     required void Function(String proxyName) onSelected,
+    void Function()? onDelayTest,
   }) {
     return TrayMenuSubmenu(
       label: group.name,
       detail: _delayText(delays[selectedName]),
       items: [
+        if (onDelayTest != null)
+          TrayMenuAction(
+            label: currentAppLocalizations.delayTest,
+            onSelected: onDelayTest,
+          ),
         for (final proxy in group.all)
           TrayMenuCheckbox(
             label: proxy.name,
