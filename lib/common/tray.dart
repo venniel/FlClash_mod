@@ -185,6 +185,7 @@ class AppTray implements TrayPort {
           },
         ),
       const TrayMenuSeparator(),
+      if (isWindows) ..._buildProfileMenu(read: read),
       if (isMacOS) ..._buildGroupMenu(trayState: trayState, read: read),
       if (isWindows) ..._buildProxyMenu(trayState: trayState, read: read),
       if (trayState.isStart) ...[
@@ -268,6 +269,32 @@ class AppTray implements TrayPort {
         },
       ),
       const TrayMenuSeparator(),
+    ];
+  }
+
+  List<TrayMenuItem> _buildProfileMenu({required ProviderReader read}) {
+    final profilesState = read(profilesStateProvider);
+    final profiles = profilesState.profiles;
+    if (profiles.isEmpty) {
+      return const [];
+    }
+    final currentProfileId = profilesState.currentProfileId;
+    final currentProfile = profiles.getProfile(currentProfileId);
+    return [
+      TrayMenuSubmenu(
+        label: currentAppLocalizations.profiles,
+        detail: currentProfile?.realLabel,
+        items: [
+          for (final profile in profiles)
+            TrayMenuCheckbox(
+              label: profile.realLabel,
+              checked: profile.id == currentProfileId,
+              onSelected: () {
+                read(profilesActionProvider.notifier).changeProfile(profile.id);
+              },
+            ),
+        ],
+      ),
     ];
   }
 

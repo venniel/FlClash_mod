@@ -10,6 +10,8 @@ import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/action.dart';
+import 'package:fl_clash/providers/config.dart';
+import 'package:fl_clash/providers/database.dart';
 import 'package:fl_clash/providers/state.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter/foundation.dart';
@@ -21,8 +23,10 @@ import 'package:riverpod/riverpod.dart';
 import 'package:tray/tray.dart';
 
 import '../helpers/app_paths.dart';
+import '../helpers/test_profiles.dart';
 
 const _channel = MethodChannel('tray');
+const _codec = StandardMethodCodec();
 
 const _proxyGroup = Group(
   name: 'Proxy',
@@ -115,7 +119,9 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     calls = [];
     tray = AppTray.forPlatform(isMacOS: true, isWindows: false);
-    container = ProviderContainer();
+    container = ProviderContainer(
+      overrides: [profilesProvider.overrideWith(TestProfiles.new)],
+    );
     Tray.instance.resetForTesting();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, (call) async {
@@ -456,10 +462,92 @@ void main() {
       },
     );
 
+    test(
+      'wraps the profiles in a profiles menu showing the selection',
+      () async {
+        final local = Profile.normal(label: 'Local');
+        final remote = Profile.normal(
+          label: 'Remote',
+          url: 'https://example.com/sub',
+        );
+        container.dispose();
+        container = ProviderContainer(
+          overrides: [
+            profilesProvider.overrideWith(() => TestProfiles([local, remote])),
+          ],
+        );
+        container.read(currentProfileIdProvider.notifier).value = remote.id;
+
+        await update(_trayState(groups: [_proxyGroup]), on: windows);
+
+        final l10n = currentAppLocalizations;
+        final labels = _labels(showCall());
+        final submenus = _items(
+          showCall(),
+        ).where((item) => item['type'] == 'submenu').toList();
+        expect(submenus, hasLength(2));
+        final profiles = submenus.first;
+        expect(profiles['label'], l10n.profiles);
+        expect(profiles['detail'], 'Remote');
+        // The profiles menu sits between the modes and the proxies menu.
+        expect(
+          labels.indexOf(Mode.direct.label),
+          lessThan(labels.indexOf(l10n.profiles)),
+        );
+        expect(
+          labels.indexOf(l10n.profiles),
+          lessThan(labels.indexOf(l10n.proxies)),
+        );
+        final children = (profiles['items'] as List)
+            .cast<Map<Object?, Object?>>();
+        expect(children.map((item) => item['label']), ['Local', 'Remote']);
+        expect(children.map((item) => item['checked']), [false, true]);
+      },
+    );
+
+    test('selecting a profile in the menu switches to it', () async {
+      final local = Profile.normal(label: 'Local');
+      final remote = Profile.normal(
+        label: 'Remote',
+        url: 'https://example.com/sub',
+      );
+      container.dispose();
+      container = ProviderContainer(
+        overrides: [
+          profilesProvider.overrideWith(() => TestProfiles([local, remote])),
+        ],
+      );
+
+      await update(_trayState(), on: windows);
+
+      final profiles = _items(showCall()).firstWhere(
+        (item) =>
+            item['type'] == 'submenu' &&
+            item['label'] == currentAppLocalizations.profiles,
+      );
+      final children = (profiles['items'] as List)
+          .cast<Map<Object?, Object?>>();
+      final remoteItem = children.singleWhere(
+        (item) => item['label'] == 'Remote',
+      );
+
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .handlePlatformMessage(
+            _channel.name,
+            _codec.encodeMethodCall(
+              MethodCall('onMenuItemSelected', {'id': remoteItem['id']}),
+            ),
+            (_) {},
+          );
+
+      expect(container.read(currentProfileIdProvider), remote.id);
+    });
+
     test('shows the measured delays inside the proxies menu', () async {
       container.dispose();
       container = ProviderContainer(
         overrides: [
+          profilesProvider.overrideWith(TestProfiles.new),
           selectedProxyNameProvider('Proxy').overrideWithValue('A'),
           trayDelaysProvider.overrideWithValue({
             'Proxy': {'A': 120, 'B': -1},

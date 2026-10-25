@@ -4,8 +4,10 @@ import 'package:fl_clash/common/app_localizations.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/manager/locale_manager.dart';
 import 'package:fl_clash/manager/tray_manager.dart';
+import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -174,6 +176,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_RecordingSystemAction.updateTrayCount, 1);
+  });
+
+  testWidgets('a profile change pushes the tray forward on Windows', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await pumpTrayManager(tester);
+      _RecordingSystemAction.updateTrayCount = 0;
+
+      container
+          .read(profilesProvider.notifier)
+          .put(Profile.normal(label: 'New'));
+      await tester.pumpAndSettle();
+
+      expect(_RecordingSystemAction.updateTrayCount, 1);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('an unchanged tray state does not touch the tray', (

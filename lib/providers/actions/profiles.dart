@@ -65,6 +65,10 @@ class ProfilesAction extends _$ProfilesAction {
     ref.read(currentProfileIdProvider.notifier).value = profile.id;
   }
 
+  void changeProfile(int id) {
+    ref.read(currentProfileIdProvider.notifier).value = id;
+  }
+
   Future<List<Profile>> providerUsers(Profile profile) async {
     if (profile.type == ProfileType.custom) {
       return const [];

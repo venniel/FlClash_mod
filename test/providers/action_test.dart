@@ -77,6 +77,22 @@ void main() {
       expect(container.read(profilesProvider), [updatedFirst, second]);
     });
 
+    test('switches the current profile', () {
+      final first = Profile.normal(label: 'First');
+      final second = Profile.normal(label: 'Second');
+      final container = ProviderContainer(
+        overrides: [
+          currentProfileIdProvider.overrideWithBuild((_, _) => first.id),
+          profilesProvider.overrideWith(() => TestProfiles([first, second])),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(profilesActionProvider.notifier).changeProfile(second.id);
+
+      expect(container.read(currentProfileIdProvider), second.id);
+    });
+
     test(
       'skips profile updates that are disabled, fresh, or file-based',
       () async {

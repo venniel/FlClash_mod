@@ -47,6 +47,13 @@ class _TrayManagerState extends ConsumerState<TrayManager> {
         }
       });
     }
+    if (system.isWindows) {
+      ref.listenManual(profilesStateProvider, (prev, next) {
+        if (prev != next) {
+          _requestUpdate();
+        }
+      });
+    }
     if (system.isMacOS) {
       ref.listenManual(trayTitleStateProvider, (prev, next) {
         if (prev != next) {
